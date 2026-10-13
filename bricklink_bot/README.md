@@ -53,3 +53,16 @@ In the Discord Developer Portal, enable **Message Content Intent**. Invite the b
 - Add hosting and restart policy only after the data checks pass.
 
 No changes are made to the existing crypto or BrickEconomy bot workflows.
+
+
+## Fastest next step: test Option A from GitHub Actions
+
+A manual, credential-free check has been added at `.github/workflows/bricklink-access-test.yml`. It checks the public Price Guide URLs for set `10326-1` and minifigure `twn486` from a GitHub-hosted runner and reports whether the pages appear blocked. It does not log in, use a token, or bypass any challenge.
+
+1. Open the repository's **Actions** tab.
+2. Select **BrickLink public access test**.
+3. Choose branch `feature/bricklink-discord-price-bot` in the branch dropdown.
+4. Click **Run workflow**.
+5. Open the run and inspect the step output.
+
+A successful HTTP 200 only confirms that the page is reachable; it does **not** prove the price parser works. If the workflow detects a challenge or cannot reach the page, Option A remains unverified and the bot should not be treated as ready. Existing bot workflows are not changed.
