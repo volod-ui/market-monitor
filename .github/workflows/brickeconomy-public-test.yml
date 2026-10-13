@@ -1,0 +1,57 @@
+name: BrickEconomy public page test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-public-pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check public item pages (no API key)
+        run: |
+          python - <<'PY'
+          import re
+          import urllib.request
+          from html import unescape
+
+          urls = {
+              "LEGO set 10326": "https://www.brickeconomy.com/set/10326-1/natural-history-museum",
+              "Minifigure twn486": "https://www.brickeconomy.com/minifig/twn486/natural-history-museum-statue",
+          }
+
+          for label, url in urls.items():
+              print(f"--- {label} ---")
+              request = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "Mozilla/5.0 (compatible; MarketMonitorTest/1.0)", "Accept": "text/html"},
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      body = response.read().decode("utf-8", errors="replace")
+                      print("HTTP:", response.status)
+                      print("Final URL:", response.geturl())
+                      print("HTML bytes:", len(body.encode("utf-8")))
+                      title = re.search(r"<title[^>]*>(.*?)</title>", body, re.I | re.S)
+                      print("Page title:", unescape(re.sub(r"\s+", " ", title.group(1))).strip() if title else "(none)")
+                      checks = {
+                          "value/price terms": r"market value|current value|price guide|value \(",
+                          "used/loose wording": r"used|loose",
+                          "listing/sales terms": r"listings|for sale|sales|sold",
+                          "challenge markers": r"captcha|access denied|cloudflare|verify you are human",
+                      }
+                      for name, pattern in checks.items():
+                          print(f"{name}:", "YES" if re.search(pattern, body, re.I) else "no")
+                      snippets = re.findall(r".{0,70}(?:current value|market value|lowest price|highest price|for sale|sold).{0,100}", body, re.I)
+                      print("Relevant snippets:")
+                      for snippet in snippets[:8]:
+                          print(" ", unescape(re.sub(r"<[^>]+>", " ", snippet)).strip()[:220])
+                      if len(body) < 1000:
+                          print("WARNING: response body is too short to trust.")
+              except Exception as exc:
+                  print("REQUEST FAILED:", type(exc).__name__, str(exc))
+              print()
+          PY
