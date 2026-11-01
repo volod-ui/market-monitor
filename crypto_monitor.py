@@ -79,11 +79,13 @@ WISHLIST_DOUBLE_THRESHOLD = -10.0
 # SPECIAL CMC LOOKUPS
 # =========================================================
 
+SPECIAL_IDS = {
+    # CoinMarketCap IDs are unambiguous and safer than ticker lookups.
+    "BTC": "1",       # Bitcoin
+    "UNI": "7083",    # Uniswap
+}
+
 SPECIAL_SLUGS = {
-    # Use exact CoinMarketCap slugs for symbols that should never be
-    # resolved by ticker alone. This avoids similarly named assets.
-    "BTC": "bitcoin",
-    "UNI": "uniswap",
     "BABY": "babylon",
     "W": "wormhole",
 }
@@ -407,7 +409,7 @@ all_symbols = list(
 regular_symbols = [
     symbol
     for symbol in all_symbols
-    if symbol not in SPECIAL_SLUGS
+    if symbol not in SPECIAL_SLUGS and symbol not in SPECIAL_IDS
 ]
 
 
@@ -557,13 +559,70 @@ def fetch_quotes():
 
 
     # -----------------------------------------------------
-    # Exact slug lookups
+    # Exact ID lookups (BTC and UNI)
+    # -----------------------------------------------------
+
+    for symbol, coin_id in SPECIAL_IDS.items():
+
+        if symbol not in all_symbols:
+            continue
+
+        response = get_json(
+            QUOTES_URL,
+            {
+                "id": coin_id,
+                "convert": "EUR",
+            },
+        )
+
+        data = response.get("data", [])
+
+        if isinstance(data, dict):
+            data = list(data.values())
+
+        matching_items = [
+            item for item in data
+            if str(item.get("symbol", "")).upper() == symbol
+        ]
+
+        if len(matching_items) != 1:
+            raise RuntimeError(
+                f"CMC exact-ID lookup for {symbol} returned "
+                f"{len(matching_items)} matching assets; refusing "
+                "to use an ambiguous price."
+            )
+
+        item = matching_items[0]
+        quote_list = item.get("quote", [])
+
+        quote = next(
+            (
+                candidate for candidate in quote_list
+                if str(candidate.get("symbol", "")).upper() == "EUR"
+            ),
+            None,
+        )
+
+        if quote is None or quote.get("price") is None:
+            raise RuntimeError(
+                f"CMC did not return a EUR price for {symbol}."
+            )
+
+        prices[symbol] = {
+            "name": item.get("name", symbol),
+            "price": float(quote["price"]),
+            "change_1h": float(quote.get("percent_change_1h", 0)),
+            "change_24h": float(quote.get("percent_change_24h", 0)),
+        }
+
+
+    # -----------------------------------------------------
+    # Exact slug lookups for other special coins
     # -----------------------------------------------------
 
     for symbol, slug in SPECIAL_SLUGS.items():
 
         if symbol not in all_symbols:
-
             continue
 
         response = get_json(
@@ -574,82 +633,45 @@ def fetch_quotes():
             },
         )
 
-        data = response.get(
-            "data",
-            []
+        data = response.get("data", [])
+
+        if isinstance(data, dict):
+            data = list(data.values())
+
+        matching_items = [
+            item for item in data
+            if str(item.get("symbol", "")).upper() == symbol
+        ]
+
+        if len(matching_items) != 1:
+            raise RuntimeError(
+                f"CMC slug lookup for {symbol} returned "
+                f"{len(matching_items)} matching assets; refusing "
+                "to use an ambiguous price."
+            )
+
+        item = matching_items[0]
+        quote_list = item.get("quote", [])
+
+        quote = next(
+            (
+                candidate for candidate in quote_list
+                if str(candidate.get("symbol", "")).upper() == "EUR"
+            ),
+            None,
         )
 
-        if isinstance(
-            data,
-            dict,
-        ):
-
-            data = list(
-                data.values()
+        if quote is None or quote.get("price") is None:
+            raise RuntimeError(
+                f"CMC did not return a EUR price for {symbol}."
             )
 
-        for item in data:
-
-            quote_list = item.get(
-                "quote",
-                []
-            )
-
-            if not quote_list:
-
-                continue
-
-            quote = None
-
-            for candidate in quote_list:
-
-                if str(
-                    candidate.get(
-                        "symbol",
-                        ""
-                    )
-                ).upper() == "EUR":
-
-                    quote = candidate
-
-                    break
-
-            if quote is None:
-
-                quote = quote_list[0]
-
-            price = quote.get(
-                "price"
-            )
-
-            if price is None:
-
-                continue
-
-            prices[symbol] = {
-                "name": item.get(
-                    "name",
-                    symbol
-                ),
-                "price": float(
-                    price
-                ),
-                "change_1h": float(
-                    quote.get(
-                        "percent_change_1h",
-                        0
-                    )
-                ),
-                "change_24h": float(
-                    quote.get(
-                        "percent_change_24h",
-                        0
-                    )
-                ),
-            }
-
-            break
-
+        prices[symbol] = {
+            "name": item.get("name", symbol),
+            "price": float(quote["price"]),
+            "change_1h": float(quote.get("percent_change_1h", 0)),
+            "change_24h": float(quote.get("percent_change_24h", 0)),
+        }
 
     missing = [
         symbol
