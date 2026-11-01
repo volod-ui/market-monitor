@@ -80,6 +80,10 @@ WISHLIST_DOUBLE_THRESHOLD = -10.0
 # =========================================================
 
 SPECIAL_SLUGS = {
+    # Use exact CoinMarketCap slugs for symbols that should never be
+    # resolved by ticker alone. This avoids similarly named assets.
+    "BTC": "bitcoin",
+    "UNI": "uniswap",
     "BABY": "babylon",
     "W": "wormhole",
 }
